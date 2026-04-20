@@ -74,29 +74,27 @@ def measure_rtt(url: str, probes: int = PROBES) -> dict[str, Any]:
     rtt_values: list[float] = []
     failures = 0
     for _ in range(probes):
-        start = time.perf_counter_ns()
         try:
             urllib.request.urlopen(url, timeout=3)
         except URLError:
             failures += 1
         continue
-    end = time.perf_counter_ns()
-    rtt_ms = (end - start) / 1_000_000
+
+    rtt_ms = (time.perf_counter_ns() - time.perf_counter_ns()) / 1_000_000
     rtt_values.append(rtt_ms)
-    time.sleep(0.2)
     if not rtt_values:
         return {
-            "min_ms": None,
-            "mean_ms": None,
-            "median_ms": None,
-            "loss_pct": 100.0,
+            "min": None,
+            "mean": None,
+            "median": None,
+            "loss": 100.0,
             "samples": []
         }
     return {
-        "min_ms": min(rtt_values),
-        "mean_ms": sum(rtt_values) / len(rtt_values),
-        "median_ms": float(np.median(rtt_values)),
-        "loss_pct": (failures / probes) * 100,
+        "min": min(rtt_values),
+        "mean": sum(rtt_values) / len(rtt_values),
+        "median": float(np.median(rtt_values)),
+        "loss": (failures / probes) * 100,
         "samples": rtt_values
     }
 
@@ -218,27 +216,25 @@ def make_plots(results: dict[str, dict[str, Any]]) -> None:
     os.makedirs(FIGURES_DIR, exist_ok=True)
     usable = {
         name: info for name, info in results.items()
-        if info.get("median_ms") is not None
+        if info.get("median") is not None
     }
-    ordered = sorted(usable, key=lambda name: usable[name]["distance_km"])
+    ordered = sorted(usable, key=lambda name: usable[name]["distance"])
 
     # Figure 1: Bar chart comparing theoretical vs measured RTT
+    #provided 
     fig, ax = plt.subplots(figsize=(11, 6))
-    pos = np.arange(len(ordered))   # x positions for each city
-    w = 0.2                         # bar width
+    pos = np.arange(len(ordered))                        
     # extract values
     min_vals = [usable[name]["theoretical_min_ms"] for name in ordered]
     med_vals = [usable[name]["median_ms"] for name in ordered]
     # plot bars
-    ax.bar(pos, min_vals, w, label="Theoretical")
-    ax.bar(pos + w, med_vals, w, label="Measured")
+    ax.bar(pos, min_vals, 0.5, label="Theory")
+    ax.bar(pos + 0.5, med_vals, 0.5, label="Measured")
     # formatting
     ax.set_xlabel("City")
     ax.set_ylabel("RTT (ms)")
     ax.set_title("RTT Comparison by City")
     plt.tight_layout()
-    ax.set_xticks(pos + w / 2)
-    ax.set_xticklabels(ordered, rotation=45, ha="right")
     ax.legend()
     # save figure
     plt.savefig(f"{FIGURES_DIR}/fig1_rtt_comparison.png", dpi=150, bbox_inches="tight")
@@ -246,40 +242,39 @@ def make_plots(results: dict[str, dict[str, Any]]) -> None:
 
     # Figure 2: Scatter plot of distance vs RTT
     #================================================================
-    fig, ax = plt.subplots(figsize=(11, 6))
-    # extract values
+   #================================================================
+    fig, ax = plt.subplots(figsize=(10, 6))
+   
+   # extract values
     dist_vals = [usable[name]["distance_km"] for name in ordered]
     rtt_vals = [usable[name]["median_ms"] for name in ordered]
     color_vals = [CONTINENT_COLORS[usable[name]["continent"]] for name in ordered]
-    # scatter plot
+   
+   # scatter plot
     ax.scatter(dist_vals, rtt_vals, c=color_vals)
-    # theoretical minimum line
-    theory_vals = [usable[name]["theoretical_min_ms"] for name in ordered]
-    ax.plot(dist_vals, theory_vals, linestyle="--", label="Theoretical minimum")
-    # label each point with city name
+   
+   # label each point with city name
     for name in ordered:
         x = usable[name]["distance_km"]
         y = usable[name]["median_ms"]
-        ax.text(x, y, name, fontsize=8)
-    # legend for continents + line
+        ax.text(x, y, name, fontsize=12)
+        
+   # legend for continents 
     legend_items = []
     for cont, col in CONTINENT_COLORS.items():
-        legend_items.append(mpatches.Patch(color=col, label=cont))
-    legend_items.append(
-        plt.Line2D([0], [0], linestyle="--", color="black", label="Theoretical minimum")
-    )
-    # formatting
-    plt.tight_layout()
+        legend_items.append(mpatches.Patch(color=col, label=cont)
+   )
+   
+   # formatting
     ax.set_xlabel("Distance (km)")
     ax.set_ylabel("Measured median RTT (ms)")
     ax.set_title("RTT vs. Distance")
     ax.legend(handles=legend_items)
+    
     # save figure
     plt.savefig(f"{FIGURES_DIR}/fig2_distance_scatter.png", dpi=150, bbox_inches="tight")
     plt.close()
-
     print(f"Figures saved to {FIGURES_DIR}/")
-    
     
 # ─────────────────────────────────────────────
 # MAIN - Nothing to Implement Here - same as OG repository 
@@ -312,5 +307,6 @@ def main():
               f"{(f'{ratio:.2f}' if ratio else 'N/A'):>7}{flag}")
 
     make_plots(results)
+
 if __name__ == "__main__":
     main()
