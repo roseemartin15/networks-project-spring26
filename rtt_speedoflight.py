@@ -1,21 +1,32 @@
 """
+Rose Martin
 RTT vs. Speed-of-Light
-Networks Assignment — Measurement & Geography
-
-Run with: python rtt_speedoflight.py   (no sudo needed)
+Networks Assignment — Measurement & Geography 2026 
 Requires: pip install requests matplotlib numpy
 """
-
-import math, time, os, requests, numpy as np
+from typing import Any
+import math
+import time
+import os
+import requests
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import urllib.request
-
+from urllib.error import URLError
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-
-TARGETS = {
+#The targets and the continent colors specified 
+TARGETS: dict[str, dict[str, Any]] = {
+    "Sendai":       {"url": "http://www.tohoku.ac.jp",  "coords": (38.2682,   140.8694), "continent": "Asia"},
+    "Seoul":        {"url": "http://www.snu.ac.kr",     "coords": (37.5503,   126.9971), "continent": "Asia"},
+    "New Delhi":    {"url": "http://www.iitd.ac.in",    "coords": (28.6139,    77.2088), "continent": "Asia"},
+    "Santiago":     {"url": "http://www.uchile.cl",     "coords": (-33.4489,  -70.6693), "continent": "S. America"},
+    "Johannesburg": {"url": "http://www.wits.ac.za",    "coords": (-26.2056,   28.0337), "continent": "Africa"},
+    "Berlin":       {"url": "http://www.fu-berlin.de",  "coords": (52.5200,    13.4050), "continent": "Europe"},
+    "London":       {"url": "http://www.imperial.ac.uk","coords": (51.5074,    -0.1278), "continent": "Europe"},
+    "Canberra":     {"url": "http://www.anu.edu.au",    "coords": (-35.2802,  149.1310), "continent": "Oceania"},
     "Tokyo":        {"url": "http://www.google.co.jp",   "coords": (35.6762,  139.6503), "continent": "Asia"},
     "São Paulo":    {"url": "http://www.google.com.br",  "coords": (-23.5505, -46.6333), "continent": "S. America"},
     "Lagos":        {"url": "http://www.google.com.ng",  "coords": (6.5244,     3.3792), "continent": "Africa"},
@@ -25,7 +36,6 @@ TARGETS = {
     "London":       {"url": "http://www.google.co.uk",   "coords": (51.5074,   -0.1278), "continent": "Europe"},
     "Singapore":    {"url": "http://www.google.com.sg",  "coords": (1.3521,   103.8198), "continent": "Asia"},
 }
-
 PROBES           = 15
 FIBER_SPEED_KM_S = 200_000
 FIGURES_DIR      = "figures"
@@ -37,15 +47,12 @@ CONTINENT_COLORS = {
     "Europe":    "#457b9d",
     "Oceania":   "#a8dadc",
 }
-
 # ─────────────────────────────────────────────
 # TASK 1 — MEASURE RTTs
 # ─────────────────────────────────────────────
-
-def measure_rtt(url: str, probes: int = PROBES) -> dict:
+def measure_rtt(url: str, probes: int = PROBES) -> dict[str, Any]:
     """
     Measure RTT to `url` using HTTP requests.
-
     Return:
         {
             "min_ms":   float | None,
@@ -54,7 +61,6 @@ def measure_rtt(url: str, probes: int = PROBES) -> dict:
             "loss_pct": float,
             "samples":  list[float],
         }
-
     TODO:
         1. Loop `probes` times.
         2. Record time before and after urllib.request.urlopen(url, timeout=3).
@@ -65,20 +71,34 @@ def measure_rtt(url: str, probes: int = PROBES) -> dict:
         6. Sleep 0.2s between probes.
         7. If ALL probes lost, return None for all stats.
     """
-    samples = []
-    lost    = 0
-
+    rtt_values: list[float] = []
+    failures = 0
     for _ in range(probes):
-        # TODO: send probe
-        time.sleep(0.2)
-
-    if not samples:
-        return {"min_ms": None, "mean_ms": None, "median_ms": None,
-                "loss_pct": 100.0, "samples": []}
-
-    # TODO: compute and return stats
-    return {}  # placeholder
-
+        start = time.perf_counter_ns()
+        try:
+            urllib.request.urlopen(url, timeout=3)
+        except URLError:
+            failures += 1
+        continue
+    end = time.perf_counter_ns()
+    rtt_ms = (end - start) / 1_000_000
+    rtt_values.append(rtt_ms)
+    time.sleep(0.2)
+    if not rtt_values:
+        return {
+            "min_ms": None,
+            "mean_ms": None,
+            "median_ms": None,
+            "loss_pct": 100.0,
+            "samples": []
+        }
+    return {
+        "min_ms": min(rtt_values),
+        "mean_ms": sum(rtt_values) / len(rtt_values),
+        "median_ms": float(np.median(rtt_values)),
+        "loss_pct": (failures / probes) * 100,
+        "samples": rtt_values
+    }
 
 # ─────────────────────────────────────────────
 # TASK 2 — HAVERSINE + INEFFICIENCY
@@ -96,9 +116,29 @@ def great_circle_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float
     TODO: implement from scratch. Use math.radians() to convert degrees.
     Do NOT use geopy or any distance library.
     """
-    R = 6371
-    # TODO
-    return 0.0  # placeholder
+    earth_radius_km = 6371  # average radius of Earth in kilometers
+    # convert degrees → radians
+    phi1 = math.radians(lat1)
+    lambda1 = math.radians(lon1)
+    phi2 = math.radians(lat2)
+    lambda2 = math.radians(lon2)
+
+    # differences in coordinates
+    delta_phi = phi2 - phi1
+    delta_lambda = lambda2 - lambda1
+
+    # haversine formula components
+    hav = (math.sin(delta_phi / 2) ** 2 +
+           math.cos(phi1) * math.cos(phi2) *
+           math.sin(delta_lambda / 2) ** 2)
+
+    # central angle between the two points
+    central_angle = 2 * math.atan2(math.sqrt(hav), math.sqrt(1 - hav))
+
+    # final distance
+    distance_km = earth_radius_km * central_angle
+
+    return distance_km
 
 
 def get_my_location() -> tuple[float, float, str]:
@@ -108,11 +148,12 @@ def get_my_location() -> tuple[float, float, str]:
         lat, lon = map(float, r["loc"].split(","))
         return lat, lon, r.get("city", "Your Location")
     except Exception:
-        print("Could not auto-detect location. Defaulting to Boston.")
+        #default to boston if no location 
+        print("Could not auto-detect. Boston Default")
         return 42.3601, -71.0589, "Boston"
 
 
-def compute_inefficiency(results: dict, src_lat: float, src_lon: float) -> dict:
+def compute_inefficiency(results: dict[str, dict[str, Any]], src_lat: float, src_lon: float) -> dict[str, dict[str, Any]]:
     """
     Annotate each city in results with:
         "distance_km"        — great-circle distance from source
@@ -126,17 +167,31 @@ def compute_inefficiency(results: dict, src_lat: float, src_lon: float) -> dict:
         3. Compute ratio. If median_ms is None, set ratio to None.
         4. Annotate results[city] in place.
     """
-    for city, data in results.items():
-        # TODO
-        pass
+    for city_name, info in results.items():
+        # unpack destination coordinates
+        dest_lat, dest_lon = info["coords"]
+        # compute distance from source → destination
+        dist_km = great_circle_km(src_lat, src_lon, dest_lat, dest_lon)
+        # compute theoretical RTT (round trip, convert to ms)
+        min_rtt_ms = 2 * (dist_km / FIBER_SPEED_KM_S) * 1000
+        # compute inefficiency ratio (handle missing RTT)
+        if info["median_ms"] is not None:
+            ratio_val = info["median_ms"] / min_rtt_ms
+        else:
+            ratio_val = None
+        # flag high inefficiency
+        is_high = ratio_val is None or ratio_val > 3.0
+        # store results back into dictionary
+        info["distance_km"] = dist_km
+        info["theoretical_min_ms"] = min_rtt_ms
+        info["inefficiency_ratio"] = ratio_val
+        info["high_inefficiency"] = is_high
     return results
-
 
 # ─────────────────────────────────────────────
 # TASK 3 — PLOTS
 # ─────────────────────────────────────────────
-
-def make_plots(results: dict):
+def make_plots(results: dict[str, dict[str, Any]]) -> None:
     """
     Produce two figures saved to FIGURES_DIR/.
 
@@ -161,30 +216,74 @@ def make_plots(results: dict):
         plt.close()
     """
     os.makedirs(FIGURES_DIR, exist_ok=True)
-    valid  = {c: d for c, d in results.items() if d.get("median_ms") is not None}
-    cities = sorted(valid, key=lambda c: valid[c]["distance_km"])
+    usable = {
+        name: info for name, info in results.items()
+        if info.get("median_ms") is not None
+    }
+    ordered = sorted(usable, key=lambda name: usable[name]["distance_km"])
 
-    # ── Figure 1 ──────────────────────────────
+    # Figure 1: Bar chart comparing theoretical vs measured RTT
     fig, ax = plt.subplots(figsize=(11, 6))
-    # TODO
+    pos = np.arange(len(ordered))   # x positions for each city
+    w = 0.2                         # bar width
+    # extract values
+    min_vals = [usable[name]["theoretical_min_ms"] for name in ordered]
+    med_vals = [usable[name]["median_ms"] for name in ordered]
+    # plot bars
+    ax.bar(pos, min_vals, w, label="Theoretical")
+    ax.bar(pos + w, med_vals, w, label="Measured")
+    # formatting
+    ax.set_xlabel("City")
+    ax.set_ylabel("RTT (ms)")
+    ax.set_title("RTT Comparison by City")
     plt.tight_layout()
+    ax.set_xticks(pos + w / 2)
+    ax.set_xticklabels(ordered, rotation=45, ha="right")
+    ax.legend()
+    # save figure
     plt.savefig(f"{FIGURES_DIR}/fig1_rtt_comparison.png", dpi=150, bbox_inches="tight")
     plt.close()
 
-    # ── Figure 2 ──────────────────────────────
-    fig, ax = plt.subplots(figsize=(10, 7))
-    # TODO
+    # Figure 2: Scatter plot of distance vs RTT
+    #================================================================
+    fig, ax = plt.subplots(figsize=(11, 6))
+    # extract values
+    dist_vals = [usable[name]["distance_km"] for name in ordered]
+    rtt_vals = [usable[name]["median_ms"] for name in ordered]
+    color_vals = [CONTINENT_COLORS[usable[name]["continent"]] for name in ordered]
+    # scatter plot
+    ax.scatter(dist_vals, rtt_vals, c=color_vals)
+    # theoretical minimum line
+    theory_vals = [usable[name]["theoretical_min_ms"] for name in ordered]
+    ax.plot(dist_vals, theory_vals, linestyle="--", label="Theoretical minimum")
+    # label each point with city name
+    for name in ordered:
+        x = usable[name]["distance_km"]
+        y = usable[name]["median_ms"]
+        ax.text(x, y, name, fontsize=8)
+    # legend for continents + line
+    legend_items = []
+    for cont, col in CONTINENT_COLORS.items():
+        legend_items.append(mpatches.Patch(color=col, label=cont))
+    legend_items.append(
+        plt.Line2D([0], [0], linestyle="--", color="black", label="Theoretical minimum")
+    )
+    # formatting
     plt.tight_layout()
+    ax.set_xlabel("Distance (km)")
+    ax.set_ylabel("Measured median RTT (ms)")
+    ax.set_title("RTT vs. Distance")
+    ax.legend(handles=legend_items)
+    # save figure
     plt.savefig(f"{FIGURES_DIR}/fig2_distance_scatter.png", dpi=150, bbox_inches="tight")
     plt.close()
 
     print(f"Figures saved to {FIGURES_DIR}/")
-
-
+    
+    
 # ─────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────
-
+# MAIN - Nothing to Implement Here - same as OG repository 
+# ───────
 def main():
     src_lat, src_lon, src_city = get_my_location()
     print(f"Your location: {src_city} ({src_lat:.4f}, {src_lon:.4f})\n")
@@ -213,6 +312,5 @@ def main():
               f"{(f'{ratio:.2f}' if ratio else 'N/A'):>7}{flag}")
 
     make_plots(results)
-
 if __name__ == "__main__":
     main()

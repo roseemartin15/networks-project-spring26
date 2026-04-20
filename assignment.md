@@ -56,10 +56,13 @@ Save both as PNGs in a `figures/` folder.
 ### Analysis (in `analysis.md`) — 20 pts bonus
 Answer three questions:
 1. Which city has the highest inefficiency ratio? Look it up on [submarinecablemap.com](https://submarinecablemap.com) — what cables serve it and how does that explain your result?
-2. Which city is closest to the theoretical minimum? What does that tell you about routing infrastructure there?
-3. Your packet to Lagos almost certainly routes through Europe first. Why does Africa route through Europe, and what would need to change to fix it?
+The city with the hihgest inefficiency ratio was Sendai. Sendai is not a location that serves as an international cable hub. Sendai probably travels to Tokyo as a major international hub that routed via land to reach Sendai. This indirect approach can result in routing inefficiencies and the potential for congestion and queing delays. Despite being geographically close to Tokyo, Sendai is not as connected to the global submarine cable infrastructure which can yield the given delay. 
 
----
+2. Which city is closest to the theoretical minimum? What does that tell you about routing infrastructure there?
+The city that is closest to the theoreticla minimum is Seoul. The routing infrastructure there is very efficient and data can take a direct path with limited network congestion/delay. 
+
+3. Your packet to Lagos almost certainly routes through Europe first. Why does Africa route through Europe, and what would need to change to fix it?
+Lagos routes through Europe first. Africa routes through Europe first because there are limited trans-Atlantic submarine lines from Africa. No lines run from North America to Africa. Fixing this problem would involve laying more direct submarine cables to connect Africa to the other continents. 
 
 ### Setup
 ```bash
